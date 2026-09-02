@@ -1,0 +1,238 @@
+:root {
+  color-scheme: dark;
+  --bg: #14161a;
+  --panel: #1e2128;
+  --panel-2: #262a33;
+  --text: #f2f3f5;
+  --muted: #9aa0ab;
+  --accent: #4f8cff;
+  --danger: #ff5d5d;
+  --prepare: #f5a623;
+  --work: #33c46a;
+  --rest: #4f8cff;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px 16px 48px;
+}
+
+.app-header h1 {
+  font-size: 1.4rem;
+  margin: 8px 0 20px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- shared controls ---------- */
+
+.btn {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid #383c46;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.btn:active { transform: scale(0.98); }
+.btn-block { width: 100%; margin-top: 10px; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: white; font-weight: 600; }
+.btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn-start { padding: 16px; font-size: 1.1rem; }
+
+select, input[type="text"], input[type="number"] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid #383c46;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+}
+
+/* ---------- editor ---------- */
+
+.routine-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.routine-bar select { flex: 1; min-width: 0; }
+
+.routine-name-input {
+  width: 100%;
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.exercises-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.exercise {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.exercise-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.exercise-name {
+  flex: 1;
+  min-width: 120px;
+  font-weight: 600;
+}
+
+.exercise-sets-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.exercise-sets { width: 56px; }
+
+.icon-btn {
+  background: var(--panel-2);
+  border: 1px solid #383c46;
+  color: var(--text);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  background: var(--panel-2);
+  border-left: 4px solid var(--muted);
+  border-radius: 8px;
+  padding: 8px;
+}
+.step-row[data-type="prepare"] { border-left-color: var(--prepare); }
+.step-row[data-type="work"] { border-left-color: var(--work); }
+.step-row[data-type="rest"] { border-left-color: var(--rest); }
+
+.step-type { width: 96px; }
+.step-label { flex: 1; min-width: 90px; }
+.step-duration {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.step-duration input { width: 46px; text-align: center; }
+.step-duration span { color: var(--muted); }
+
+.step-row-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.add-step {
+  margin-top: 4px;
+  align-self: flex-start;
+  font-size: 0.85rem;
+  padding: 6px 10px;
+}
+
+.exercise-summary {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---------- player ---------- */
+
+.player-progress {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 10px 0;
+}
+
+.player-stage {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 40px 16px;
+  text-align: center;
+  border-top: 6px solid var(--muted);
+  transition: border-color 0.2s ease;
+}
+.player-stage[data-type="prepare"] { border-top-color: var(--prepare); }
+.player-stage[data-type="work"] { border-top-color: var(--work); }
+.player-stage[data-type="rest"] { border-top-color: var(--rest); }
+
+.player-label {
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.player-time {
+  font-size: 5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.player-next {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  min-height: 1.2em;
+}
+
+.player-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+.player-controls .btn { flex: 1; padding: 16px; font-size: 1.05rem; }
+
+.player-toggles {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.player-toggles label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+#stopBtn { margin-top: 20px; }
+
+.workout-done .player-label { color: var(--work); }

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GymTimer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="app-header">
+    <h1>GymTimer</h1>
+  </header>
+
+  <!-- ===================== EDITOR VIEW ===================== -->
+  <section id="editorView">
+
+    <div class="routine-bar">
+      <select id="routineSelect" aria-label="Routine"></select>
+      <button id="newRoutineBtn" class="btn" title="New routine">+ New</button>
+      <button id="duplicateRoutineBtn" class="btn" title="Duplicate routine">Duplicate</button>
+      <button id="deleteRoutineBtn" class="btn btn-danger" title="Delete routine">Delete</button>
+    </div>
+
+    <input id="routineName" class="routine-name-input" type="text" placeholder="Routine name">
+
+    <div id="exercisesList" class="exercises-list"></div>
+
+    <button id="addExerciseBtn" class="btn btn-block">+ Add exercise</button>
+
+    <button id="startWorkoutBtn" class="btn btn-primary btn-block btn-start">Start workout ▶</button>
+  </section>
+
+  <!-- ===================== PLAYER VIEW ===================== -->
+  <section id="playerView" hidden>
+
+    <div class="player-progress" id="playerProgress"></div>
+
+    <div id="playerStage" class="player-stage" data-type="prepare">
+      <div class="player-label" id="playerLabel">Ready</div>
+      <div class="player-time" id="playerTime">0</div>
+      <div class="player-next" id="playerNext"></div>
+    </div>
+
+    <div class="player-controls">
+      <button id="skipBackBtn" class="btn" title="Restart step">⟲</button>
+      <button id="pauseBtn" class="btn btn-primary" title="Pause / Resume">Pause</button>
+      <button id="skipBtn" class="btn" title="Skip step">Skip ⏭</button>
+    </div>
+
+    <div class="player-toggles">
+      <label><input type="checkbox" id="soundToggle" checked> Sound</label>
+      <label><input type="checkbox" id="voiceToggle" checked> Voice</label>
+    </div>
+
+    <button id="stopBtn" class="btn btn-danger btn-block">End workout</button>
+  </section>
+
+</div>
+<script src="app.js" defer></script>
+</body>
+</html>
