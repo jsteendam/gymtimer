@@ -3,13 +3,21 @@
 /* =======================================================================
    Data model
    Routine { id, name, exercises: [Exercise] }
-   Exercise { id, name, sets, steps: [Step] }
-   Step { type: 'prepare' | 'work' | 'rest', label, seconds }
+   Exercise {
+     id, name, sets,
+     variant: 'leftRight' | 'both',
+     measure: 'time' | 'reps',
+     workSeconds,   // used when measure === 'time'
+     reps,          // used when measure === 'reps'
+     restSeconds,   // user-entered target; see buildSetItems for actual-rest derivation
+   }
    ======================================================================= */
 
-const STORAGE_KEY = 'gymtimer.routines.v1';
+const STORAGE_KEY = 'gymtimer.routines.v2';
 const LAST_ROUTINE_KEY = 'gymtimer.lastRoutineId';
 const PREFS_KEY = 'gymtimer.prefs.v1';
+
+const PREPARE_SECONDS = 5; // fixed countdown before every side/rep-set
 
 function uid() {
   return (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
@@ -23,15 +31,29 @@ function defaultRoutines() {
       exercises: [
         {
           id: uid(),
-          name: 'Weighted pickups',
+          name: 'Half crimp',
           sets: 4,
-          steps: [
-            { type: 'prepare', label: 'Get ready', seconds: 5 },
-            { type: 'work', label: 'Left hand', seconds: 10 },
-            { type: 'prepare', label: 'Get ready', seconds: 5 },
-            { type: 'work', label: 'Right hand', seconds: 10 },
-            { type: 'rest', label: 'Rest', seconds: 105 }, // 2:00 total minus the 15s of countdown+right-hand
-          ],
+          variant: 'leftRight',
+          measure: 'time',
+          workSeconds: 10,
+          reps: 10,
+          restSeconds: 120, // target rest between same-side reps; actual pause is derived
+        },
+      ],
+    },
+    {
+      id: uid(),
+      name: 'Lower body',
+      exercises: [
+        {
+          id: uid(),
+          name: 'Squat',
+          sets: 3,
+          variant: 'both',
+          measure: 'reps',
+          workSeconds: 30,
+          reps: 12,
+          restSeconds: 60,
         },
       ],
     },
@@ -106,6 +128,7 @@ const playerProgress = document.getElementById('playerProgress');
 const playerStage = document.getElementById('playerStage');
 const playerLabel = document.getElementById('playerLabel');
 const playerTime = document.getElementById('playerTime');
+const playerUnit = document.getElementById('playerUnit');
 const playerNext = document.getElementById('playerNext');
 const pauseBtn = document.getElementById('pauseBtn');
 const skipBtn = document.getElementById('skipBtn');
@@ -116,6 +139,38 @@ const voiceToggle = document.getElementById('voiceToggle');
 
 soundToggle.checked = prefs.sound;
 voiceToggle.checked = prefs.voice;
+
+/* =======================================================================
+   Exercise step generation (shared by the editor summary and the player)
+   ======================================================================= */
+
+function actualRestSeconds(ex) {
+  const restSeconds = Math.max(0, Number(ex.restSeconds) || 0);
+  if (ex.variant === 'leftRight' && ex.measure === 'time') {
+    const workSeconds = Math.max(0, Number(ex.workSeconds) || 0);
+    return Math.max(0, restSeconds - PREPARE_SECONDS - workSeconds);
+  }
+  return restSeconds;
+}
+
+function buildSetItems(ex) {
+  const items = [];
+  const sides = ex.variant === 'leftRight' ? ['Left', 'Right'] : [ex.name || 'Work'];
+
+  sides.forEach(label => {
+    items.push({ type: 'prepare', measure: 'time', label: 'Get ready', seconds: PREPARE_SECONDS });
+    if (ex.measure === 'time') {
+      items.push({ type: 'work', measure: 'time', label, seconds: Math.max(0, Number(ex.workSeconds) || 0) });
+    } else {
+      items.push({ type: 'work', measure: 'reps', label, reps: Math.max(1, Number(ex.reps) || 1) });
+    }
+  });
+
+  const rest = actualRestSeconds(ex);
+  if (rest > 0) items.push({ type: 'rest', measure: 'time', label: 'Rest', seconds: rest });
+
+  return items;
+}
 
 /* =======================================================================
    Editor rendering
@@ -132,18 +187,30 @@ function renderRoutineSelect() {
   }
 }
 
-function typeLabel(type) {
-  return { prepare: 'Prepare', work: 'Work', rest: 'Rest' }[type] || type;
-}
-
 function formatDuration(totalSeconds) {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function exerciseTotalSeconds(ex) {
-  return ex.steps.reduce((sum, s) => sum + (Number(s.seconds) || 0), 0);
+function exerciseSummaryText(ex) {
+  const items = buildSetItems(ex);
+  const timedSeconds = items.reduce((sum, i) => sum + (i.measure === 'time' ? i.seconds : 0), 0);
+  const repsCount = Math.max(1, Number(ex.reps) || 1);
+  const repsPart = ex.measure === 'reps'
+    ? `${repsCount} reps${ex.variant === 'leftRight' ? ' × 2 sides' : ''} + `
+    : '';
+
+  const restSeconds = Math.max(0, Number(ex.restSeconds) || 0);
+  const rest = actualRestSeconds(ex);
+  const restNote = rest !== restSeconds ? ` (${formatDuration(restSeconds)} target)` : '';
+
+  const perSet = `${repsPart}${formatDuration(timedSeconds)} timed${restNote ? restNote : ''}`;
+
+  if (ex.measure === 'reps') {
+    return `Per set: ${perSet} · ${ex.sets} sets`;
+  }
+  return `Per set: ${perSet} · Total (${ex.sets} sets): ${formatDuration(timedSeconds * ex.sets)}`;
 }
 
 function renderExercises() {
@@ -163,7 +230,11 @@ function renderExercises() {
     nameInput.className = 'exercise-name';
     nameInput.placeholder = 'Exercise name';
     nameInput.value = ex.name;
-    nameInput.addEventListener('input', () => { ex.name = nameInput.value; persist(); });
+    nameInput.addEventListener('input', () => {
+      ex.name = nameInput.value;
+      persist();
+      summary.textContent = exerciseSummaryText(ex);
+    });
     header.appendChild(nameInput);
 
     const setsLabel = document.createElement('label');
@@ -176,6 +247,7 @@ function renderExercises() {
     setsInput.addEventListener('input', () => {
       ex.sets = Math.max(1, parseInt(setsInput.value, 10) || 1);
       persist();
+      summary.textContent = exerciseSummaryText(ex);
     });
     setsLabel.append('Sets ', setsInput);
     header.appendChild(setsLabel);
@@ -203,29 +275,76 @@ function renderExercises() {
 
     exEl.appendChild(header);
 
-    // steps
-    const stepsEl = document.createElement('div');
-    stepsEl.className = 'steps-list';
+    // config form
+    const form = document.createElement('div');
+    form.className = 'exercise-config';
 
-    ex.steps.forEach((step, stepIndex) => {
-      stepsEl.appendChild(renderStepRow(ex, step, stepIndex, () => renderExercises()));
-    });
+    const configRow = document.createElement('div');
+    configRow.className = 'field-row';
 
-    exEl.appendChild(stepsEl);
+    const sidesField = fieldWrap('Sides', selectInput([
+      ['leftRight', 'Left / Right'],
+      ['both', 'Both sides'],
+    ], ex.variant, (value) => {
+      ex.variant = value;
+      persist();
+      renderExercises();
+    }));
+    configRow.appendChild(sidesField);
 
-    const addStepBtn = document.createElement('button');
-    addStepBtn.className = 'btn add-step';
-    addStepBtn.textContent = '+ Add step';
-    addStepBtn.addEventListener('click', () => {
-      ex.steps.push({ type: 'work', label: '', seconds: 10 });
-      persist(); renderExercises();
-    });
-    exEl.appendChild(addStepBtn);
+    const measureField = fieldWrap('Measure', selectInput([
+      ['time', 'Timed'],
+      ['reps', 'Reps'],
+    ], ex.measure, (value) => {
+      ex.measure = value;
+      persist();
+      renderExercises();
+    }));
+    configRow.appendChild(measureField);
+
+    form.appendChild(configRow);
+
+    const amountRow = document.createElement('div');
+    amountRow.className = 'field-row';
+
+    if (ex.measure === 'time') {
+      amountRow.appendChild(fieldWrap('Duration', durationInput(ex.workSeconds, (seconds) => {
+        ex.workSeconds = seconds;
+        persist();
+        summary.textContent = exerciseSummaryText(ex);
+      })));
+    } else {
+      const repsInput = document.createElement('input');
+      repsInput.type = 'number';
+      repsInput.min = '1';
+      repsInput.value = ex.reps;
+      repsInput.addEventListener('input', () => {
+        ex.reps = Math.max(1, parseInt(repsInput.value, 10) || 1);
+        persist();
+        summary.textContent = exerciseSummaryText(ex);
+      });
+      amountRow.appendChild(fieldWrap('Reps', repsInput));
+    }
+
+    const restField = fieldWrap('Rest', durationInput(ex.restSeconds, (seconds) => {
+      ex.restSeconds = seconds;
+      persist();
+      summary.textContent = exerciseSummaryText(ex);
+    }));
+    const restCaption = document.createElement('div');
+    restCaption.className = 'field-caption';
+    restCaption.textContent = ex.variant === 'leftRight' && ex.measure === 'time'
+      ? 'Target time between reps on the same side'
+      : 'Rest between sets';
+    restField.appendChild(restCaption);
+    amountRow.appendChild(restField);
+
+    form.appendChild(amountRow);
+    exEl.appendChild(form);
 
     const summary = document.createElement('div');
     summary.className = 'exercise-summary';
-    const perSet = exerciseTotalSeconds(ex);
-    summary.textContent = `Per set: ${formatDuration(perSet)} · Total (${ex.sets} sets): ${formatDuration(perSet * ex.sets)}`;
+    summary.textContent = exerciseSummaryText(ex);
     exEl.appendChild(summary);
 
     exercisesList.appendChild(exEl);
@@ -242,82 +361,54 @@ function iconButton(symbol, title, onClick) {
   return btn;
 }
 
-function renderStepRow(ex, step, stepIndex, onStructuralChange) {
-  const row = document.createElement('div');
-  row.className = 'step-row';
-  row.dataset.type = step.type;
+function fieldWrap(labelText, inputEl) {
+  const wrap = document.createElement('label');
+  wrap.className = 'field';
+  const span = document.createElement('span');
+  span.className = 'field-label';
+  span.textContent = labelText;
+  wrap.append(span, inputEl);
+  return wrap;
+}
 
-  const typeSelect = document.createElement('select');
-  typeSelect.className = 'step-type';
-  for (const t of ['prepare', 'work', 'rest']) {
+function selectInput(options, value, onChange) {
+  const select = document.createElement('select');
+  for (const [optValue, optLabel] of options) {
     const opt = document.createElement('option');
-    opt.value = t;
-    opt.textContent = typeLabel(t);
-    if (t === step.type) opt.selected = true;
-    typeSelect.appendChild(opt);
+    opt.value = optValue;
+    opt.textContent = optLabel;
+    if (optValue === value) opt.selected = true;
+    select.appendChild(opt);
   }
-  typeSelect.addEventListener('change', () => {
-    step.type = typeSelect.value;
-    persist();
-    onStructuralChange();
-  });
-  row.appendChild(typeSelect);
+  select.addEventListener('change', () => onChange(select.value));
+  return select;
+}
 
-  const labelInput = document.createElement('input');
-  labelInput.type = 'text';
-  labelInput.className = 'step-label';
-  labelInput.placeholder = typeLabel(step.type);
-  labelInput.value = step.label;
-  labelInput.addEventListener('input', () => { step.label = labelInput.value; persist(); });
-  row.appendChild(labelInput);
+function durationInput(initialSeconds, onChange) {
+  const wrap = document.createElement('div');
+  wrap.className = 'duration-input';
 
-  const duration = document.createElement('div');
-  duration.className = 'step-duration';
   const minInput = document.createElement('input');
   minInput.type = 'number';
   minInput.min = '0';
-  minInput.value = Math.floor(step.seconds / 60);
+  minInput.value = Math.floor(initialSeconds / 60);
+
   const secInput = document.createElement('input');
   secInput.type = 'number';
   secInput.min = '0';
   secInput.max = '59';
-  secInput.value = step.seconds % 60;
+  secInput.value = initialSeconds % 60;
 
-  function commitDuration() {
+  function commit() {
     const m = Math.max(0, parseInt(minInput.value, 10) || 0);
     const s = Math.max(0, Math.min(59, parseInt(secInput.value, 10) || 0));
-    step.seconds = m * 60 + s;
-    persist();
+    onChange(m * 60 + s);
   }
-  minInput.addEventListener('input', commitDuration);
-  secInput.addEventListener('input', commitDuration);
+  minInput.addEventListener('input', commit);
+  secInput.addEventListener('input', commit);
 
-  duration.append(minInput, document.createTextNode('m'), secInput, document.createTextNode('s'));
-  row.appendChild(duration);
-
-  const actions = document.createElement('div');
-  actions.className = 'step-row-actions';
-  actions.appendChild(iconButton('↑', 'Move step up', () => {
-    if (stepIndex === 0) return;
-    [ex.steps[stepIndex - 1], ex.steps[stepIndex]] = [ex.steps[stepIndex], ex.steps[stepIndex - 1]];
-    persist(); onStructuralChange();
-  }));
-  actions.appendChild(iconButton('↓', 'Move step down', () => {
-    if (stepIndex === ex.steps.length - 1) return;
-    [ex.steps[stepIndex + 1], ex.steps[stepIndex]] = [ex.steps[stepIndex], ex.steps[stepIndex + 1]];
-    persist(); onStructuralChange();
-  }));
-  actions.appendChild(iconButton('⧉', 'Duplicate step', () => {
-    ex.steps.splice(stepIndex + 1, 0, { ...step });
-    persist(); onStructuralChange();
-  }));
-  actions.appendChild(iconButton('✕', 'Remove step', () => {
-    ex.steps.splice(stepIndex, 1);
-    persist(); onStructuralChange();
-  }));
-  row.appendChild(actions);
-
-  return row;
+  wrap.append(minInput, document.createTextNode('m'), secInput, document.createTextNode('s'));
+  return wrap;
 }
 
 function renderEditor() {
@@ -353,10 +444,7 @@ duplicateRoutineBtn.addEventListener('click', () => {
   const copy = JSON.parse(JSON.stringify(currentRoutine()));
   copy.id = uid();
   copy.name = copy.name + ' (copy)';
-  copy.exercises.forEach(ex => {
-    ex.id = uid();
-    ex.steps.forEach(s => { /* steps carry no id */ });
-  });
+  copy.exercises.forEach(ex => { ex.id = uid(); });
   routines.push(copy);
   currentRoutineId = copy.id;
   persist();
@@ -380,7 +468,11 @@ addExerciseBtn.addEventListener('click', () => {
     id: uid(),
     name: 'New exercise',
     sets: 3,
-    steps: [{ type: 'work', label: '', seconds: 30 }],
+    variant: 'both',
+    measure: 'time',
+    workSeconds: 30,
+    reps: 10,
+    restSeconds: 30,
   });
   persist();
   renderExercises();
@@ -395,16 +487,15 @@ function buildPlaylist(routine) {
   routine.exercises.forEach((ex) => {
     const setsTotal = Math.max(1, ex.sets);
     for (let setIndex = 1; setIndex <= setsTotal; setIndex++) {
-      ex.steps.forEach((step, stepIndex) => {
+      const setItems = buildSetItems(ex);
+      setItems.forEach((raw, i) => {
         playlist.push({
           exerciseName: ex.name || 'Exercise',
           setIndex,
           setsTotal,
-          stepIndex: stepIndex + 1,
-          stepsInSet: ex.steps.length,
-          type: step.type,
-          label: step.label || typeLabel(step.type),
-          seconds: Math.max(0, Number(step.seconds) || 0),
+          stepIndex: i + 1,
+          stepsInSet: setItems.length,
+          ...raw,
         });
       });
     }
@@ -459,6 +550,13 @@ function speak(text) {
   window.speechSynthesis.speak(utter);
 }
 
+function announcement(item) {
+  if (item.type === 'work' && item.measure === 'reps') {
+    return `${item.label}, ${item.reps} reps`;
+  }
+  return item.label;
+}
+
 function transitionSound(type) {
   if (type === 'work') beep(1046, 150);
   else if (type === 'rest') beep(523, 150);
@@ -490,7 +588,7 @@ function startWorkout() {
   const routine = currentRoutine();
   const playlist = buildPlaylist(routine);
   if (!playlist.length) {
-    alert('Add at least one exercise with a step before starting.');
+    alert('Add at least one exercise before starting.');
     return;
   }
   ensureAudioContext();
@@ -503,17 +601,24 @@ function startWorkout() {
   startStep(0);
 }
 
+function isTimed(item) {
+  return item.measure === 'time';
+}
+
 function startStep(i) {
   player.index = i;
   const item = player.playlist[i];
-  player.deadline = Date.now() + item.seconds * 1000;
   player.lastBeepSecond = null;
   renderPlayerStatic(item);
   transitionSound(item.type);
-  speak(item.label);
+  speak(announcement(item));
   clearInterval(player.tickHandle);
-  player.tickHandle = setInterval(tick, 100);
-  tick();
+  player.tickHandle = null;
+  if (isTimed(item)) {
+    player.deadline = Date.now() + item.seconds * 1000;
+    player.tickHandle = setInterval(tick, 100);
+    tick();
+  }
 }
 
 function renderPlayerStatic(item) {
@@ -523,10 +628,22 @@ function renderPlayerStatic(item) {
   playerProgress.textContent =
     `${item.exerciseName} · Set ${item.setIndex}/${item.setsTotal} · Step ${item.stepIndex}/${item.stepsInSet}`;
 
-  const next = player.playlist[player.index + 1];
-  playerNext.textContent = next ? `Next: ${next.label} (${next.seconds}s)` : 'Last step';
+  if (isTimed(item)) {
+    playerTime.textContent = item.seconds;
+    playerUnit.textContent = '';
+  } else {
+    playerTime.textContent = item.reps;
+    playerUnit.textContent = 'reps';
+  }
 
+  const next = player.playlist[player.index + 1];
+  playerNext.textContent = next
+    ? `Next: ${next.label} (${isTimed(next) ? next.seconds + 's' : next.reps + ' reps'})`
+    : 'Last step';
+
+  pauseBtn.hidden = !isTimed(item);
   pauseBtn.textContent = 'Pause';
+  skipBtn.textContent = isTimed(item) ? 'Skip ⏭' : 'Done ✓';
 }
 
 function tick() {
@@ -558,8 +675,10 @@ function finishWorkout() {
   playerStage.dataset.type = 'work';
   playerLabel.textContent = 'Workout complete!';
   playerTime.textContent = '🎉';
+  playerUnit.textContent = '';
   playerProgress.textContent = '';
   playerNext.textContent = '';
+  pauseBtn.hidden = true;
   beep(1046, 150);
   setTimeout(() => beep(1318, 200), 180);
   speak('Workout complete');

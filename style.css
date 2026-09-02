@@ -127,47 +127,44 @@ select, input[type="text"], input[type="number"] {
   font-size: 0.9rem;
 }
 
-.steps-list {
+.exercise-config {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  margin-bottom: 4px;
 }
 
-.step-row {
+.field-row {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  gap: 12px;
   flex-wrap: wrap;
-  background: var(--panel-2);
-  border-left: 4px solid var(--muted);
-  border-radius: 8px;
-  padding: 8px;
 }
-.step-row[data-type="prepare"] { border-left-color: var(--prepare); }
-.step-row[data-type="work"] { border-left-color: var(--work); }
-.step-row[data-type="rest"] { border-left-color: var(--rest); }
 
-.step-type { width: 96px; }
-.step-label { flex: 1; min-width: 90px; }
-.step-duration {
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 110px;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.field-caption {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.duration-input {
   display: flex;
   align-items: center;
   gap: 3px;
 }
-.step-duration input { width: 4.2em; padding: 8px 4px; text-align: center; }
-.step-duration span { color: var(--muted); }
-
-.step-row-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.add-step {
-  margin-top: 4px;
-  align-self: flex-start;
-  font-size: 0.85rem;
-  padding: 6px 10px;
-}
+.duration-input input { width: 4.2em; padding: 8px 4px; text-align: center; }
+.duration-input span { color: var(--muted); }
 
 .exercise-summary {
   margin-top: 8px;
@@ -207,6 +204,16 @@ select, input[type="text"], input[type="number"] {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
+}
+
+.player-unit {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+  min-height: 1.2em;
 }
 
 .player-next {
