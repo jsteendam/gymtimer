@@ -190,6 +190,12 @@ function renderExercises() {
       [routine.exercises[exIndex + 1], routine.exercises[exIndex]] = [routine.exercises[exIndex], routine.exercises[exIndex + 1]];
       persist(); renderExercises();
     }));
+    header.appendChild(iconButton('⧉', 'Duplicate exercise', () => {
+      const copy = JSON.parse(JSON.stringify(ex));
+      copy.id = uid();
+      routine.exercises.splice(exIndex + 1, 0, copy);
+      persist(); renderExercises();
+    }));
     header.appendChild(iconButton('✕', 'Remove exercise', () => {
       routine.exercises.splice(exIndex, 1);
       persist(); renderExercises();
@@ -299,6 +305,10 @@ function renderStepRow(ex, step, stepIndex, onStructuralChange) {
   actions.appendChild(iconButton('↓', 'Move step down', () => {
     if (stepIndex === ex.steps.length - 1) return;
     [ex.steps[stepIndex + 1], ex.steps[stepIndex]] = [ex.steps[stepIndex], ex.steps[stepIndex + 1]];
+    persist(); onStructuralChange();
+  }));
+  actions.appendChild(iconButton('⧉', 'Duplicate step', () => {
+    ex.steps.splice(stepIndex + 1, 0, { ...step });
     persist(); onStructuralChange();
   }));
   actions.appendChild(iconButton('✕', 'Remove step', () => {
