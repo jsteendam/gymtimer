@@ -154,7 +154,7 @@ select, input[type="text"], input[type="number"] {
   align-items: center;
   gap: 3px;
 }
-.step-duration input { width: 46px; text-align: center; }
+.step-duration input { width: 4.2em; padding: 8px 4px; text-align: center; }
 .step-duration span { color: var(--muted); }
 
 .step-row-actions {
