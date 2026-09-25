@@ -17,7 +17,7 @@ const STORAGE_KEY = 'gymtimer.routines.v2';
 const LAST_ROUTINE_KEY = 'gymtimer.lastRoutineId';
 const PREFS_KEY = 'gymtimer.prefs.v1';
 
-const PREPARE_SECONDS = 5; // fixed countdown before every side/rep-set
+const PREPARE_SECONDS = 5; // fixed countdown before every timed side
 
 function uid() {
   return (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
@@ -158,8 +158,8 @@ function buildSetItems(ex) {
   const sides = ex.variant === 'leftRight' ? ['Left', 'Right'] : [ex.name || 'Work'];
 
   sides.forEach(label => {
-    items.push({ type: 'prepare', measure: 'time', label: 'Get ready', seconds: PREPARE_SECONDS });
     if (ex.measure === 'time') {
+      items.push({ type: 'prepare', measure: 'time', label: 'Get ready', seconds: PREPARE_SECONDS });
       items.push({ type: 'work', measure: 'time', label, seconds: Math.max(0, Number(ex.workSeconds) || 0) });
     } else {
       items.push({ type: 'work', measure: 'reps', label, reps: Math.max(1, Number(ex.reps) || 1) });
