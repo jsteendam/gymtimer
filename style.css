@@ -82,13 +82,34 @@ select, input[type="text"], input[type="number"] {
 .exercises-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 4px;
 }
 
 .exercise {
   background: var(--panel);
   border-radius: var(--radius);
   padding: 12px;
+}
+
+.exercise.in-superset { border-left: 4px solid var(--accent); }
+.exercise.in-superset:not(.superset-first) { border-top-left-radius: 0; border-top-right-radius: 0; }
+.exercise.in-superset:not(.superset-last) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+
+.superset-link {
+  align-self: center;
+  background: transparent;
+  border: 1px dashed #383c46;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 2px 12px;
+  margin: 3px 0;
+  cursor: pointer;
+}
+.superset-link.linked {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .exercise-header {

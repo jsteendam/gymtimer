@@ -9,7 +9,8 @@
      measure: 'time' | 'reps',
      workSeconds,   // used when measure === 'time'
      reps,          // used when measure === 'reps'
-     restSeconds,   // user-entered target; see buildSetItems for actual-rest derivation
+     restSeconds,   // target from this exercise's anchor to its next set; see buildRestGate
+     supersetWithNext, // optional; links this exercise with the next into a superset
    }
    ======================================================================= */
 
@@ -153,23 +154,51 @@ function actualRestSeconds(ex) {
   return restSeconds;
 }
 
+// Prepare/work items for one set. The work item that starts the exercise's rest clock
+// (Left for timed left/right, otherwise the last side) is flagged with anchorFor.
 function buildSetItems(ex) {
   const items = [];
   const sides = ex.variant === 'leftRight' ? ['Left', 'Right'] : [ex.name || 'Work'];
+  const anchorIndex = ex.variant === 'leftRight' && ex.measure === 'time' ? 0 : sides.length - 1;
 
-  sides.forEach(label => {
+  sides.forEach((label, i) => {
+    let work;
     if (ex.measure === 'time') {
       items.push({ type: 'prepare', measure: 'time', label: 'Get ready', seconds: PREPARE_SECONDS });
-      items.push({ type: 'work', measure: 'time', label, seconds: Math.max(0, Number(ex.workSeconds) || 0) });
+      work = { type: 'work', measure: 'time', label, seconds: Math.max(0, Number(ex.workSeconds) || 0) };
     } else {
-      items.push({ type: 'work', measure: 'reps', label, reps: Math.max(1, Number(ex.reps) || 1) });
+      work = { type: 'work', measure: 'reps', label, reps: Math.max(1, Number(ex.reps) || 1) };
     }
+    if (i === anchorIndex) work.anchorFor = ex.id;
+    items.push(work);
   });
 
-  const rest = actualRestSeconds(ex);
-  if (rest > 0) items.push({ type: 'rest', measure: 'time', label: 'Rest', seconds: rest });
-
   return items;
+}
+
+// Rest before the next set/round: waits until every listed exercise has reached its target
+// since its anchor. Resolved by the player when the step starts.
+function buildRestGate(exercises) {
+  return {
+    type: 'rest',
+    measure: 'time',
+    label: 'Rest',
+    gateFor: exercises.map(ex => ({ id: ex.id, targetSeconds: Math.max(0, Number(ex.restSeconds) || 0) })),
+  };
+}
+
+// Consecutive exercises linked with supersetWithNext form one group; others are groups of one.
+function groupExercises(exercises) {
+  const groups = [];
+  let current = [];
+  exercises.forEach((ex, i) => {
+    current.push(ex);
+    if (!ex.supersetWithNext || i === exercises.length - 1) {
+      groups.push(current);
+      current = [];
+    }
+  });
+  return groups;
 }
 
 /* =======================================================================
@@ -193,16 +222,21 @@ function formatDuration(totalSeconds) {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-function exerciseSummaryText(ex) {
+function exerciseSummaryText(ex, inSuperset) {
   const items = buildSetItems(ex);
-  const timedSeconds = items.reduce((sum, i) => sum + (i.measure === 'time' ? i.seconds : 0), 0);
   const repsCount = Math.max(1, Number(ex.reps) || 1);
   const repsPart = ex.measure === 'reps'
     ? `${repsCount} reps${ex.variant === 'leftRight' ? ' × 2 sides' : ''} + `
     : '';
 
+  if (inSuperset) {
+    const workSeconds = items.reduce((sum, i) => sum + (i.measure === 'time' ? i.seconds : 0), 0);
+    return `Per set: ${repsPart}${formatDuration(workSeconds)} timed · ${ex.sets} sets · rest overlaps with superset`;
+  }
+
   const restSeconds = Math.max(0, Number(ex.restSeconds) || 0);
   const rest = actualRestSeconds(ex);
+  const timedSeconds = items.reduce((sum, i) => sum + (i.measure === 'time' ? i.seconds : 0), 0) + rest;
   const restNote = rest !== restSeconds ? ` (${formatDuration(restSeconds)} target)` : '';
 
   const perSet = `${repsPart}${formatDuration(timedSeconds)} timed${restNote ? restNote : ''}`;
@@ -217,9 +251,24 @@ function renderExercises() {
   const routine = currentRoutine();
   exercisesList.innerHTML = '';
 
+  const groupOf = new Map();
+  for (const group of groupExercises(routine.exercises)) {
+    group.forEach((member, pos) => groupOf.set(member, { size: group.length, pos }));
+  }
+
   routine.exercises.forEach((ex, exIndex) => {
+    const { size: groupSize, pos: groupPos } = groupOf.get(ex);
+    const inSuperset = groupSize > 1;
+
+    if (exIndex > 0) exercisesList.appendChild(linkToggle(routine.exercises[exIndex - 1]));
+
     const exEl = document.createElement('div');
     exEl.className = 'exercise';
+    if (inSuperset) {
+      exEl.classList.add('in-superset');
+      if (groupPos === 0) exEl.classList.add('superset-first');
+      if (groupPos === groupSize - 1) exEl.classList.add('superset-last');
+    }
 
     // header
     const header = document.createElement('div');
@@ -233,7 +282,7 @@ function renderExercises() {
     nameInput.addEventListener('input', () => {
       ex.name = nameInput.value;
       persist();
-      summary.textContent = exerciseSummaryText(ex);
+      summary.textContent = exerciseSummaryText(ex, inSuperset);
     });
     header.appendChild(nameInput);
 
@@ -247,7 +296,7 @@ function renderExercises() {
     setsInput.addEventListener('input', () => {
       ex.sets = Math.max(1, parseInt(setsInput.value, 10) || 1);
       persist();
-      summary.textContent = exerciseSummaryText(ex);
+      summary.textContent = exerciseSummaryText(ex, inSuperset);
     });
     setsLabel.append('Sets ', setsInput);
     header.appendChild(setsLabel);
@@ -311,7 +360,7 @@ function renderExercises() {
       amountRow.appendChild(fieldWrap('Duration', durationInput(ex.workSeconds, (seconds) => {
         ex.workSeconds = seconds;
         persist();
-        summary.textContent = exerciseSummaryText(ex);
+        summary.textContent = exerciseSummaryText(ex, inSuperset);
       })));
     } else {
       const repsInput = document.createElement('input');
@@ -321,7 +370,7 @@ function renderExercises() {
       repsInput.addEventListener('input', () => {
         ex.reps = Math.max(1, parseInt(repsInput.value, 10) || 1);
         persist();
-        summary.textContent = exerciseSummaryText(ex);
+        summary.textContent = exerciseSummaryText(ex, inSuperset);
       });
       amountRow.appendChild(fieldWrap('Reps', repsInput));
     }
@@ -329,13 +378,15 @@ function renderExercises() {
     const restField = fieldWrap('Rest', durationInput(ex.restSeconds, (seconds) => {
       ex.restSeconds = seconds;
       persist();
-      summary.textContent = exerciseSummaryText(ex);
+      summary.textContent = exerciseSummaryText(ex, inSuperset);
     }));
     const restCaption = document.createElement('div');
     restCaption.className = 'field-caption';
-    restCaption.textContent = ex.variant === 'leftRight' && ex.measure === 'time'
-      ? 'Target time between reps on the same side'
-      : 'Rest between sets';
+    restCaption.textContent = inSuperset
+      ? 'Target time from the start of one set to the start of the next'
+      : ex.variant === 'leftRight' && ex.measure === 'time'
+        ? 'Target time between reps on the same side'
+        : 'Rest between sets';
     restField.appendChild(restCaption);
     amountRow.appendChild(restField);
 
@@ -344,11 +395,24 @@ function renderExercises() {
 
     const summary = document.createElement('div');
     summary.className = 'exercise-summary';
-    summary.textContent = exerciseSummaryText(ex);
+    summary.textContent = exerciseSummaryText(ex, inSuperset);
     exEl.appendChild(summary);
 
     exercisesList.appendChild(exEl);
   });
+}
+
+function linkToggle(ex) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'superset-link' + (ex.supersetWithNext ? ' linked' : '');
+  btn.textContent = ex.supersetWithNext ? '🔗 Superset' : 'link';
+  btn.title = ex.supersetWithNext ? 'Unlink superset' : 'Link as superset';
+  btn.addEventListener('click', () => {
+    ex.supersetWithNext = !ex.supersetWithNext;
+    persist(); renderExercises();
+  });
+  return btn;
 }
 
 function iconButton(symbol, title, onClick) {
@@ -482,25 +546,57 @@ addExerciseBtn.addEventListener('click', () => {
    Player
    ======================================================================= */
 
+// Groups run round by round (A1, B1, A2, B2, …); members with fewer sets drop out of later
+// rounds. Before each exercise's next set sits a rest gate for that exercise.
 function buildPlaylist(routine) {
   const playlist = [];
-  routine.exercises.forEach((ex) => {
-    const setsTotal = Math.max(1, ex.sets);
-    for (let setIndex = 1; setIndex <= setsTotal; setIndex++) {
-      const setItems = buildSetItems(ex);
-      setItems.forEach((raw, i) => {
-        playlist.push({
-          exerciseName: ex.name || 'Exercise',
-          setIndex,
-          setsTotal,
-          stepIndex: i + 1,
-          stepsInSet: setItems.length,
-          ...raw,
+  const groups = groupExercises(routine.exercises);
+
+  groups.forEach((group, groupIndex) => {
+    const rounds = Math.max(...group.map(ex => Math.max(1, ex.sets)));
+    const meta = (ex, setIndex) => ({
+      exerciseName: ex.name || 'Exercise',
+      setIndex,
+      setsTotal: Math.max(1, ex.sets),
+      supersetSize: group.length,
+    });
+
+    for (let setIndex = 1; setIndex <= rounds; setIndex++) {
+      const members = group.filter(ex => setIndex <= Math.max(1, ex.sets));
+      // One rest per round, before it starts, never between exercises of a superset.
+      if (setIndex > 1) {
+        playlist.push({ ...meta(members[0], setIndex), stepIndex: 1, stepsInSet: 1, ...buildRestGate(members) });
+      }
+      members.forEach((ex) => {
+        const setItems = buildSetItems(ex);
+        if (group.length > 1) {
+          // In a superset the rest target spans set start to next set start, so the
+          // other exercises' time (and this one's own) counts toward it.
+          setItems.forEach(item => { delete item.anchorFor; });
+          setItems[0].anchorStartFor = ex.id;
+        }
+        setItems.forEach((raw, i) => {
+          playlist.push({ ...meta(ex, setIndex), stepIndex: i + 1, stepsInSet: setItems.length, ...raw });
         });
       });
     }
+
+    // Rest before moving on to the next exercise/superset.
+    if (groupIndex < groups.length - 1) {
+      const first = group[0];
+      playlist.push({ ...meta(first, Math.max(1, first.sets)), stepIndex: 1, stepsInSet: 1, ...buildRestGate(group) });
+    }
   });
   return playlist;
+}
+
+function resolveRestGate(item) {
+  const remaining = item.gateFor.map(({ id, targetSeconds }) => {
+    const anchor = player.anchors[id];
+    const elapsed = anchor ? (Date.now() - anchor) / 1000 : 0;
+    return targetSeconds - elapsed;
+  });
+  return Math.max(0, Math.round(Math.max(...remaining)));
 }
 
 const player = {
@@ -511,6 +607,7 @@ const player = {
   paused: false,
   tickHandle: null,
   lastBeepSecond: null,
+  anchors: {},   // exercise id → timestamp its rest clock started
   wakeLock: null,
   audioCtx: null,
 };
@@ -595,6 +692,7 @@ function startWorkout() {
   player.playlist = playlist;
   player.index = 0;
   player.paused = false;
+  player.anchors = {};
   editorView.hidden = true;
   playerView.hidden = false;
   requestWakeLock();
@@ -608,6 +706,12 @@ function isTimed(item) {
 function startStep(i) {
   player.index = i;
   const item = player.playlist[i];
+  if (item.gateFor && item.seconds === undefined) item.seconds = resolveRestGate(item);
+  if (item.gateFor && item.seconds <= 0) {
+    advance();
+    return;
+  }
+  if (item.anchorStartFor) player.anchors[item.anchorStartFor] = Date.now();
   player.lastBeepSecond = null;
   renderPlayerStatic(item);
   transitionSound(item.type);
@@ -626,7 +730,7 @@ function renderPlayerStatic(item) {
   playerStage.classList.remove('workout-done');
   playerLabel.textContent = item.label;
   playerProgress.textContent =
-    `${item.exerciseName} · Set ${item.setIndex}/${item.setsTotal} · Step ${item.stepIndex}/${item.stepsInSet}`;
+    `${item.supersetSize > 1 ? 'Superset · ' : ''}${item.exerciseName} · Set ${item.setIndex}/${item.setsTotal} · Step ${item.stepIndex}/${item.stepsInSet}`;
 
   if (isTimed(item)) {
     playerTime.textContent = item.seconds;
@@ -638,7 +742,9 @@ function renderPlayerStatic(item) {
 
   const next = player.playlist[player.index + 1];
   playerNext.textContent = next
-    ? `Next: ${next.label} (${isTimed(next) ? next.seconds + 's' : next.reps + ' reps'})`
+    ? next.gateFor && next.seconds === undefined
+      ? `Next: ${next.label}`
+      : `Next: ${next.label} (${isTimed(next) ? next.seconds + 's' : next.reps + ' reps'})`
     : 'Last step';
 
   pauseBtn.hidden = !isTimed(item);
@@ -662,6 +768,8 @@ function tick() {
 }
 
 function advance() {
+  const current = player.playlist[player.index];
+  if (current && current.anchorFor) player.anchors[current.anchorFor] = Date.now();
   if (player.index + 1 < player.playlist.length) {
     startStep(player.index + 1);
   } else {
