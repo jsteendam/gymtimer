@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const esbuild = require('esbuild');
@@ -23,6 +24,26 @@ async function build() {
   fs.writeFileSync(path.join(outDir, 'index.html'), inlined);
 
   console.log(`Built dist/index.html (${(inlined.length / 1024).toFixed(1)} KB)`);
+
+  // PWA: manifest + icons copied as-is, service worker versioned by content hash
+  const iconFiles = fs.readdirSync(path.join(root, 'icons')).map((f) => `icons/${f}`);
+  const assets = ['manifest.webmanifest', ...iconFiles];
+  fs.mkdirSync(path.join(outDir, 'icons'), { recursive: true });
+  const hash = crypto.createHash('sha256').update(inlined);
+  for (const file of assets) {
+    const data = fs.readFileSync(path.join(root, file));
+    hash.update(data);
+    fs.writeFileSync(path.join(outDir, file), data);
+  }
+
+  const precache = ['./', './index.html', ...assets.map((f) => `./${f}`)];
+  const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8')
+    .replace('__BUILD_HASH__', hash.digest('hex').slice(0, 12))
+    .replace(/const PRECACHE = \[[\s\S]*?\];/, `const PRECACHE = ${JSON.stringify(precache)};`);
+  const minifiedSw = (await esbuild.transform(sw, { loader: 'js', minify: true })).code;
+  fs.writeFileSync(path.join(outDir, 'sw.js'), minifiedSw);
+
+  console.log(`Built dist/sw.js, copied ${assets.join(', ')}`);
 }
 
 build().catch((err) => {

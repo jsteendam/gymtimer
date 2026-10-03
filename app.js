@@ -841,3 +841,9 @@ startWorkoutBtn.addEventListener('click', startWorkout);
    ======================================================================= */
 
 renderEditor();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });
+  });
+}

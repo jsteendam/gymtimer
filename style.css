@@ -27,6 +27,7 @@ html, body {
   max-width: 640px;
   margin: 0 auto;
   padding: 16px 16px 48px;
+  padding-top: max(16px, env(safe-area-inset-top));
 }
 
 .app-header h1 {
